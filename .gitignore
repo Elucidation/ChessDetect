@@ -36,3 +36,7 @@ captures/
 /.idea/libraries
 .DS_Store
 /captures
+
+# OpenCV folder
+/openCVLibrary310
+/app/src/main/jniLibs

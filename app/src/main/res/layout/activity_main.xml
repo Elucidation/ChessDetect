@@ -12,5 +12,5 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Detect Chess Things!" />
+        android:text="Detect Chess Things2!" />
 </RelativeLayout>
