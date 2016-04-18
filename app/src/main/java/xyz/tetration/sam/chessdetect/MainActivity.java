@@ -34,6 +34,9 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
 
     private static final String TAG = "ChessDetectActivity";
     private static final int REQUEST_CAMERA_PERMISSION = 1;
+    private static final double THETA_THRESHOLD = 0.5 * Math.PI / 180;
+    private static final double RHO_THRESHOLD = 1;
+    private static final short HOUGH_ACCUMULATOR_THRESHOLD = 40;
     private CameraBridgeViewBase mOpenCvCameraView;
 
     private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
@@ -164,9 +167,10 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
                 Imgproc.cvtColor(mIntermediateMat, mRgba, Imgproc.COLOR_GRAY2RGBA, 4);
                 break;
             case VIEW_MODE_CONTOURS:
-                // input frame is grayscale
+                // Update rgba fresh
+                mRgba = inputFrame.rgba();
 
-                // blur it, kernel size 3x3
+                // blur grayscale, kernel size 3x3
                 // TODO: 4/17/2016 Bilateral filter instead
 //                Imgproc.resize(inputFrame.gray(), mSmall);
                 Imgproc.blur(inputFrame.gray(), mGray, new Size(3,3));
@@ -209,8 +213,42 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
                     // Find bounding rectangle
                     Rect bbox = Imgproc.boundingRect(best_contour);
 
+                    // Find and draw hough lines
+                    Mat sub_edges = mIntermediateMat.submat(bbox);
+                    Mat lines = new Mat();
+                    Imgproc.HoughLinesP(sub_edges, lines, 1, Math.PI/180,
+                            HOUGH_ACCUMULATOR_THRESHOLD, 20, 320);
+
+
+//                    for (i = 0; i < lines.rows(); i++)
+//                    {
+//                        double[] line = lines.get(i,0);
+//                        // Draw green lines
+//                        Imgproc.line(mRgba,
+//                                new Point(line[0]+bbox.x, line[1]+bbox.y),
+//                                new Point(line[2]+bbox.x, line[3]+bbox.y),
+//                                new Scalar(0,255,0),2
+//                                );
+//                    }
+
+                    // get pruned list
+                    ArrayList<double[]> new_list = new ArrayList<>();
+                    ArrayList<Double> thetas = new ArrayList<Double>();
+                    ArrayList<Double> rhos = new ArrayList<Double>();
+                    pruneLines(lines, new_list, thetas, rhos, THETA_THRESHOLD, RHO_THRESHOLD);
+
+                    for (i = 0; i < new_list.size(); i++)
+                    {
+                        double[] line = new_list.get(i);
+                        // Draw green lines
+                        Imgproc.line(mRgba,
+                                new Point(line[0]+bbox.x, line[1]+bbox.y),
+                                new Point(line[2]+bbox.x, line[3]+bbox.y),
+                                new Scalar(0,255,0),2
+                        );
+                    }
+
                     // Draw contour onto rgba image
-                    mRgba = inputFrame.rgba();
                     // Draw full contour in blue
                     Imgproc.drawContours(mRgba, contours, best_idx, new Scalar(0,0,255), 1);
 
@@ -246,6 +284,50 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
         }
 
         return mRgba;
+    }
+
+    /* Prune lines that are too close in theta/rho to previous lines */
+    private void pruneLines(Mat lines,
+                            ArrayList<double[]> new_list,
+                            ArrayList<Double> thetas,
+                            ArrayList<Double> rhos,
+                            double theta_threshold,
+                            double rho_threshold) {
+
+        for (int i=0; i < lines.rows(); i++)
+        {
+            double[] line = lines.get(i,0);
+            double x1 = line[0];
+            double y1 = line[1];
+            double x2 = line[2];
+            double y2 = line[3];
+
+            double theta = Math.atan2(x2-x1, y2-y1);
+            double rho = x1 * Math.cos(theta) + y1 * Math.sin(theta);
+
+            // Check duplicate status
+            boolean is_duplicate = false;
+            for (double other_theta : thetas) {
+                if (Math.abs(theta - other_theta) < theta_threshold) {
+                    for (double other_rho : rhos) {
+                        if (Math.abs(rho - other_rho) < rho_threshold) {
+                            is_duplicate = true;
+                            break;
+                        }
+                    }
+                }
+                if (is_duplicate)
+                    break;
+            }
+
+            if (!is_duplicate) {
+                thetas.add(theta);
+                rhos.add(rho);
+                new_list.add(line);
+            }
+
+        }
+
     }
 
     public boolean onOptionsItemSelected(MenuItem item) {
