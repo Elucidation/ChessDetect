@@ -60,18 +60,18 @@ for chessboard_idx in range(1,20):
       rho = x1*np.cos(theta) + y1*np.sin(theta)
 
       # If near one of the other values, ignore this one
-      is_duplicate = False
-      for other_theta in thetas:
-        if np.abs(theta - other_theta) < 1.2*np.pi/180.0:
-          for other_rho in rhos:
-            if np.abs(rho - other_rho) < 4:
-              is_duplicate = True
-              break
-        if is_duplicate:
-          break
+      # is_duplicate = False
+      # for other_theta in thetas:
+      #   if np.abs(theta - other_theta) < 1.2*np.pi/180.0:
+      #     for other_rho in rhos:
+      #       if np.abs(rho - other_rho) < 4:
+      #         is_duplicate = True
+      #         break
+      #   if is_duplicate:
+      #     break
 
-      if is_duplicate:
-        continue
+      # if is_duplicate:
+      #   continue
 
 
       thetas.append(theta)
