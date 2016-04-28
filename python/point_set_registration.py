@@ -5,15 +5,19 @@ np.set_printoptions(suppress=True, linewidth=200)
 ###### Iterative closest point (brute-force comparison)
 N=7
 
-k = np.tile(np.arange(N),(N,1))
+k = np.tile(np.arange(N, dtype=np.float32),(N,1))
 pos_gnd = np.vstack([k.flatten(), k.flatten('F')]).T
+
+# normalize pos_gnd
+pos_gnd = pos_gnd - pos_gnd.mean(0) # center
+pos_gnd = pos_gnd / (pos_gnd.max(0) - pos_gnd.min(0)) # normalize
 
 
 # Actual affine transformation matrix
-rot = 3*np.pi/180
+rot = 13*np.pi/180
 M_real = np.mat([
-  [np.cos(rot)*0.8, -np.sin(rot), 0],
-  [np.sin(rot), np.cos(rot)*0.9, 0],
+  [np.cos(rot)*0.8, -np.sin(rot), 1],
+  [np.sin(rot), np.cos(rot)*0.9, 32],
   [0,0,1]
   ])
 
@@ -27,6 +31,10 @@ pos_meas = pos_meas[:,:2].A # remove 1's column and back to array
 
 # shuffle all measured readings since we don't know what order it'd be in
 np.random.shuffle(pos_meas)
+
+# Normalize measured readings
+pos_meas = pos_meas - pos_meas.mean(0) # center
+pos_meas = pos_meas / (pos_meas.max(0) - pos_meas.min(0)) # normalize
 
 
 def findClosestPoint(pos, arr):
@@ -96,7 +104,7 @@ for k in range(10):
 
 
   plt.cla()
-  plt.plot(pos_gnd[:,0],pos_gnd[:,1],'kh',markersize=1,label='gnd')
+  # plt.plot(pos_gnd[:,0],pos_gnd[:,1],'kh',markersize=1,label='gnd')
   plt.plot(pos_meas[:,0],pos_meas[:,1],'r.',markersize=10,label='gnd')
   plt.plot(pos_lsq[:,0],pos_lsq[:,1],'gh',markersize=10,label='lsq')
 

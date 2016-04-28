@@ -3,10 +3,10 @@ from matplotlib import pyplot as plt
 np.set_printoptions(suppress=True)
 
 ####### Line fit
-N=50
+N=100
 x = np.linspace(-13,23,N)
 y_ground = 0.23*x - 12
-y = y_ground + np.random.randn(N)*2
+y = y_ground + np.random.randn(N)*1.5
 
 
 X = np.ones((N,2))

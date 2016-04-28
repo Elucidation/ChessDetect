@@ -1,12 +1,11 @@
 import cv2
 import numpy as np
 from matplotlib import pyplot as plt
-from sklearn import linear_model, datasets
 import chessdetect_helpers
 np.set_printoptions(suppress=True)
 
 
-chessboard_idx = 16
+chessboard_idx = 17
 
 # Load image
 filename = 'chessboard%d.jpg' % chessboard_idx
@@ -16,7 +15,7 @@ original_img = cv2.imread(filename)
 print("Original Shape [y, x, channels]: ",original_img.shape)
 
 # Get scaled image
-img_max_height = 320
+img_max_height = 512.
 img_scale_ratio = img_max_height / original_img.shape[1]
 
 
@@ -41,7 +40,7 @@ mask = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, se1)
 print("Processed Shape [y, x]: ",gray_img.shape)
 
 
-im2, contours, hierarchy = cv2.findContours(mask.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+contours, hierarchy = cv2.findContours(mask.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
 areas = [cv2.contourArea(c) for c in contours]
 
@@ -54,10 +53,10 @@ for i in range(1):
   cnt = contours[contour_order[i]]
   cv2.drawContours(img_overlay, [cnt], 0, (0,255,0), 1)
 
-  rect = cv2.minAreaRect(cnt)
-  box = cv2.boxPoints(rect)
-  box = np.int0(box)
-  cv2.drawContours(img_overlay, [box], 0, (0,0,255), 2)
+  # rect = cv2.minAreaRect(cnt)
+  # box = cv2.boxPoints(rect)
+  # box = np.int0(box)
+  # cv2.drawContours(img_overlay, [box], 0, (0,0,255), 2)
 
   bbox = cv2.boundingRect(cnt)
   x,y,w,h = cv2.boundingRect(cnt)
@@ -67,18 +66,26 @@ for i in range(1):
 if w < 50 or h < 50:
   print("Bbox too small")
 
+min_side = min(w,h)
+
 small_img = img[y:y+h,x:x+w].copy()
 small_edges = edges[y:y+h,x:x+w,]
 #img, rho, theta, threshold (min num of pts in accumulator)
-lines = cv2.HoughLinesP(small_edges,1,np.pi/180, 50, minLineLength=50, maxLineGap=320)
-lines, thetas, rhos = chessdetect_helpers.pruneLines(lines, theta_threshold=0.5*np.pi/180.0, rho_threshold=1)
-
+lines = cv2.HoughLinesP(small_edges,1,np.pi/180, threshold=np.int(min_side/8), minLineLength=min_side/8, maxLineGap=min_side)
 if lines is None:
   print("No Lines found!")
-else:
-  print("Number of lines found:",len(lines))
-  for _x1,_y1,_x2,_y2 in lines[:,0,:]:
-    cv2.line(small_img,(_x1,_y1),(_x2,_y2),(250,50,50),2)
+  lines = np.array([]).reshape(0,0,0)
+
+
+print("Raw # lines:",lines.shape[1])
+lines, thetas, rhos = chessdetect_helpers.pruneLines(lines, theta_threshold=1*np.pi/180.0, rho_threshold=5)
+if lines is None:
+  print("No Lines left!")
+  lines = np.array([]).reshape(0,0,0)
+print("Pruned # lines:",lines.shape[1])
+
+for _x1,_y1,_x2,_y2 in lines[0,:,:]:
+  cv2.line(small_img,(_x1,_y1),(_x2,_y2),(250,50,50),2)
 
 
 cv2.imshow('Overlay',img_overlay)
@@ -88,3 +95,8 @@ cv2.imshow('Close',small_img)
 # Wait for any key to destroy all windows
 cv2.waitKey(0)
 cv2.destroyAllWindows()
+
+plt.plot(np.array(thetas)*180/np.pi,rhos,'o')
+plt.grid()
+# plt.axis('equal')
+plt.show()
