@@ -19,10 +19,8 @@ thetas = np.array([ 1.57079633,  0.2649934 ,  1.5848141 ,  0.18932192,  1.570796
         1.5538488 ,  3.01939748,  1.60487404,  1.6026327 ,  1.57079633,
         3.10250642,  0.03844259])
 
+
 N = rhos.size
-print("There are %d given lines" % N)
-# print("rhos\n", rhos)
-# print("thetas\n", np.floor(thetas*180/np.pi))
 
 # Invert negative rhos
 for i in range(N):
@@ -31,29 +29,45 @@ for i in range(N):
     # thetas[i] = (thetas[i]+np.pi) % np.pi - np.pi
     thetas[i] = (thetas[i]-np.pi)
 
+# Normalize rhos and thetas, based on known sizes
+img_maxsize = 320
+rhos /= img_maxsize
+thetas /= 2*np.pi
 
-theta_mean = thetas.mean()
-rhos_mean = rhos.mean()
-# plt.plot([theta_mean*180/np.pi, theta_mean*180/np.pi], [rhos.min(), rhos.max()],'k--')
-# plt.plot(thetas*180/np.pi, rhos,'o')
+
+print("There are %d given lines" % N)
+
+# theta_mean = thetas.mean()
+# rhos_mean = rhos.mean()
+# plt.plot([theta_mean, theta_mean], [rhos.min(), rhos.max()],'k--')
+# plt.plot(thetas, rhos,'o')
 # plt.show()
 
 pos_meas = np.zeros((N,2))
 pos_meas[:,0] = thetas
 pos_meas[:,1] = rhos
 
-img_maxsize = 200
-
-pos_gnd = np.zeros((18,2))
-pos_gnd[:9,0] = 0
-pos_gnd[:9,1] = np.arange(9) * img_maxsize / 9 + rhos_mean/2
-pos_gnd[9:,0] = np.pi/2
-pos_gnd[9:,1] = np.arange(9) * img_maxsize / 9 + rhos_mean/2
+pos_gnd = np.zeros((18,2), dtype=np.float32)
+pos_gnd[:9,0] = 0.
+pos_gnd[:9,1] = np.arange(9) / 9. / 2.
+pos_gnd[9:,0] = 0.25
+pos_gnd[9:,1] = np.arange(9) / 9. / 2.
 
 
-# # Normalize measured readings
-# pos_meas = pos_meas - pos_meas.mean(0) # center
-# pos_meas = pos_meas / (pos_meas.max(0) - pos_meas.min(0)) # normalize
+# Normalize ground readings
+pos_gnd = pos_gnd - pos_gnd.mean(0) # center
+pos_gnd = pos_gnd / (pos_gnd.max(0) - pos_gnd.min(0)) # normalize
+
+# Normalize measured readings
+pos_meas = pos_meas - pos_meas.mean(0) # center
+pos_meas = pos_meas / (pos_meas.max(0) - pos_meas.min(0)) # normalize
+
+M_start = np.matrix([[ 0.73126989,-0.25159087,-0.07278123],
+                     [ 0.25159087, 0.73126989,-0.09586837]])
+
+a = np.ones((18,3))
+a[:,:2] = pos_gnd
+pos_gnd = (M_start * a.T).T.A
 
 
 def findClosestPoint(pos, arr):
@@ -88,48 +102,85 @@ plt.show()
 
 pos_curr = pos_gnd.copy()
 for k in range(10):
-
-
+  print("Iter: %d" % k)
   closest_idxs = getClosestPointsWithRepeats(pos_curr, pos_meas)
   pos_closest = pos_meas[closest_idxs]
-  print(closest_idxs)
+  # print(closest_idxs)
+
+  # plt.cla()
+  # plt.plot(pos_gnd[:,0],pos_gnd[:,1],'kh',markersize=1,label='gnd')
+  # plt.plot(pos_meas[:,0],pos_meas[:,1],'r.',markersize=10,label='gnd')
+
+  # # Plot lines to closest matches
+  # for i in range(pos_gnd.shape[0]):
+  #   plt.plot(
+  #     [pos_curr[i,0], pos_meas[closest_idxs[i],0]],
+  #     [pos_curr[i,1], pos_meas[closest_idxs[i],1]],
+  #     'b:')
+
+
+  # plt.axis('equal')
+  # plt.legend(loc='best')
+  # plt.title('Iter: %d' % k)
+  # plt.draw()
+  # plt.pause(5)
 
   # original points
-  # X = np.zeros((2*N*N,6))
+  #AFFINE
   X = np.zeros((2*18,6))
   X[::2,:2] = pos_curr
   X[::2,2] = 1
   X[1::2,3:5] = pos_curr
   X[1::2,5] = 1
+
+  # #ROTATE-TRANSLATE
+  # X = np.zeros((2*18,4))
+  # X[::2,0:2] = pos_curr
+  # X[::2,2] = 1
+  # X[1::2,0] = pos_curr[:,1]
+  # X[1::2,1] = -pos_curr[:,0]
+  # X[1::2,3] = 1
+
+
   X = np.mat(X)
+  # print(X)
 
   # projected points
-  # Y = np.ones(2*N*N)
   Y = np.ones(2*18)
   Y[::2] = pos_closest[:,0]
   Y[1::2] = pos_closest[:,1]
   Y = Y.reshape(-1,1)
-
+ 
 
   coeffs = np.linalg.inv(X.T*X)*X.T*Y
+
+  # #AFFINE
   M = coeffs.reshape(2,3)
-  print(M)
+
+  #ROTATE-TRANSLATE
+  # M = np.mat(np.zeros((2,3)))
+  # M[0,0] = coeffs[0]
+  # M[0,1] = coeffs[1]
+  # M[0,2] = coeffs[2]
+  
+  # M[1,0] = -coeffs[1]
+  # M[1,1] = coeffs[0]
+  # M[1,2] = coeffs[3]
+
 
   if (M[0,0] + M[1,1] == 0):
     print("Singular")
     break
-  print(M)
   # new closest pred
   pos_lsq = (M * np.hstack([pos_curr,np.ones((18,1))]).T).T
-  # pos_lsq = (M * np.hstack([pos_curr,np.ones((N*N,1))]).T).T
   pos_lsq = pos_lsq[:,:2].A
   pos_curr = pos_lsq
 
 
   plt.cla()
+  plt.plot(pos_lsq[:,0],pos_lsq[:,1],'gh',markersize=10,label='lsq')
   plt.plot(pos_gnd[:,0],pos_gnd[:,1],'kh',markersize=1,label='gnd')
   plt.plot(pos_meas[:,0],pos_meas[:,1],'r.',markersize=10,label='gnd')
-  plt.plot(pos_lsq[:,0],pos_lsq[:,1],'gh',markersize=10,label='lsq')
 
   # Plot lines to closest matches
   for i in range(pos_gnd.shape[0]):
@@ -139,10 +190,55 @@ for k in range(10):
       'b:')
 
 
-  # plt.axis('equal')
+  plt.axis('equal')
   plt.legend(loc='best')
   plt.title('Iter: %d' % k)
   plt.draw()
-  plt.pause(0.1)
+  plt.pause(0.05)
 
+
+
+# Get final transformation matrix
+#AFFINE
+X = np.zeros((2*18,6))
+X[::2,:2] = pos_gnd
+X[::2,2] = 1
+X[1::2,3:5] = pos_gnd
+X[1::2,5] = 1
+
+# #ROTATE-TRANSLATE
+# X = np.zeros((2*18,4))
+# X[::2,0:2] = pos_gnd
+# X[::2,2] = 1
+# X[1::2,0] = pos_gnd[:,1]
+# X[1::2,1] = -pos_gnd[:,0]
+# X[1::2,3] = 1
+
+
+X = np.mat(X)
+# print(X)
+
+# projected points
+Y = np.ones(2*18)
+Y[::2] = pos_closest[:,0]
+Y[1::2] = pos_closest[:,1]
+Y = Y.reshape(-1,1)
+
+
+coeffs = np.linalg.inv(X.T*X)*X.T*Y
+
+#AFFINE
+M = coeffs.reshape(2,3)
+
+# #ROTATE-TRANSLATE
+# M = np.mat(np.zeros((2,3)))
+# M[0,0] = coeffs[0]
+# M[0,1] = coeffs[1]
+# M[0,2] = coeffs[2]
+
+# M[1,0] = -coeffs[1]
+# M[1,1] = coeffs[0]
+# M[1,2] = coeffs[3]
+
+print(M)
 plt.show(block=True)
