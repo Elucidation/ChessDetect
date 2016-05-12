@@ -49,25 +49,27 @@ pos_meas[:,1] = rhos
 
 pos_gnd = np.zeros((18,2), dtype=np.float32)
 pos_gnd[:9,0] = 0.
-pos_gnd[:9,1] = np.arange(9) / 9. / 2.
-pos_gnd[9:,0] = 0.25
-pos_gnd[9:,1] = np.arange(9) / 9. / 2.
+pos_gnd[:9,1] = np.arange(9)/9.
+pos_gnd[9:,0] = 1.
+pos_gnd[9:,1] = np.arange(9)/9.
 
 
 # Normalize ground readings
 pos_gnd = pos_gnd - pos_gnd.mean(0) # center
-pos_gnd = pos_gnd / (pos_gnd.max(0) - pos_gnd.min(0)) # normalize
+#pos_gnd = pos_gnd / (pos_gnd.max(0) - pos_gnd.min(0)) # normalize
+pos_gnd = pos_gnd * np.sqrt(2)/np.sum(np.sqrt(np.sum(pos_gnd**2,axis=1)))
 
 # Normalize measured readings
 pos_meas = pos_meas - pos_meas.mean(0) # center
-pos_meas = pos_meas / (pos_meas.max(0) - pos_meas.min(0)) # normalize
+# pos_meas = pos_meas / (pos_meas.max(0) - pos_meas.min(0)) # normalize
+pos_meas = pos_meas * np.sqrt(2)/np.sum(np.sqrt(np.sum(pos_meas**2,axis=1)))
 
-M_start = np.matrix([[ 0.73126989,-0.25159087,-0.07278123],
-                     [ 0.25159087, 0.73126989,-0.09586837]])
+# M_start = np.matrix([[ 0.73126989,-0.25159087,-0.07278123],
+#                      [ 0.25159087, 0.73126989,-0.09586837]])
 
-a = np.ones((18,3))
-a[:,:2] = pos_gnd
-pos_gnd = (M_start * a.T).T.A
+# a = np.ones((18,3))
+# a[:,:2] = pos_gnd
+#pos_gnd = (M_start * a.T).T.A
 
 
 def findClosestPoint(pos, arr):
@@ -105,33 +107,21 @@ for k in range(10):
   print("Iter: %d" % k)
   closest_idxs = getClosestPointsWithRepeats(pos_curr, pos_meas)
   pos_closest = pos_meas[closest_idxs]
-  # print(closest_idxs)
-
-  # plt.cla()
-  # plt.plot(pos_gnd[:,0],pos_gnd[:,1],'kh',markersize=1,label='gnd')
-  # plt.plot(pos_meas[:,0],pos_meas[:,1],'r.',markersize=10,label='gnd')
-
-  # # Plot lines to closest matches
-  # for i in range(pos_gnd.shape[0]):
-  #   plt.plot(
-  #     [pos_curr[i,0], pos_meas[closest_idxs[i],0]],
-  #     [pos_curr[i,1], pos_meas[closest_idxs[i],1]],
-  #     'b:')
-
-
-  # plt.axis('equal')
-  # plt.legend(loc='best')
-  # plt.title('Iter: %d' % k)
-  # plt.draw()
-  # plt.pause(5)
 
   # original points
+  #HOMOGRAPHY
+  X = np.zeros((2*18,8))
+  X[::2,:3] = np.hstack([pos_curr,np.ones([18,1])])
+  X[1::2,3:6] = np.hstack([pos_curr,np.ones([18,1])])
+  X[::2,6:] = -pos_curr*pos_closest[:,[0,0]]
+  X[1::2,6:] = -pos_curr*pos_closest[:,[1,1]]
+
   #AFFINE
-  X = np.zeros((2*18,6))
-  X[::2,:2] = pos_curr
-  X[::2,2] = 1
-  X[1::2,3:5] = pos_curr
-  X[1::2,5] = 1
+  # X = np.zeros((2*18,6))
+  # X[::2,:2] = pos_curr
+  # X[::2,2] = 1
+  # X[1::2,3:5] = pos_curr
+  # X[1::2,5] = 1
 
   # #ROTATE-TRANSLATE
   # X = np.zeros((2*18,4))
@@ -141,9 +131,7 @@ for k in range(10):
   # X[1::2,1] = -pos_curr[:,0]
   # X[1::2,3] = 1
 
-
   X = np.mat(X)
-  # print(X)
 
   # projected points
   Y = np.ones(2*18)
@@ -151,36 +139,22 @@ for k in range(10):
   Y[1::2] = pos_closest[:,1]
   Y = Y.reshape(-1,1)
  
-
+  # Least squares estiable coeffs = X \ Y
   coeffs = np.linalg.inv(X.T*X)*X.T*Y
 
-  # #AFFINE
-  M = coeffs.reshape(2,3)
+  # Form homography 3x3 matrix
+  M =  np.vstack([coeffs,1]).reshape(3,3)
 
-  #ROTATE-TRANSLATE
-  # M = np.mat(np.zeros((2,3)))
-  # M[0,0] = coeffs[0]
-  # M[0,1] = coeffs[1]
-  # M[0,2] = coeffs[2]
-  
-  # M[1,0] = -coeffs[1]
-  # M[1,1] = coeffs[0]
-  # M[1,2] = coeffs[3]
-
-
-  if (M[0,0] + M[1,1] == 0):
-    print("Singular")
-    break
   # new closest pred
   pos_lsq = (M * np.hstack([pos_curr,np.ones((18,1))]).T).T
-  pos_lsq = pos_lsq[:,:2].A
-  pos_curr = pos_lsq
+  pos_lsq /= pos_lsq[:,2]  # normalize by 3rd column
+  pos_curr = pos_lsq[:,:2].A 
 
 
   plt.cla()
-  plt.plot(pos_lsq[:,0],pos_lsq[:,1],'gh',markersize=10,label='lsq')
-  plt.plot(pos_gnd[:,0],pos_gnd[:,1],'kh',markersize=1,label='gnd')
-  plt.plot(pos_meas[:,0],pos_meas[:,1],'r.',markersize=10,label='gnd')
+  plt.plot(pos_gnd[:,0],pos_gnd[:,1],'k.',markersize=5,label='gnd')
+  plt.plot(pos_lsq[:,0],pos_lsq[:,1],'go',markersize=7,label='lsq')
+  plt.plot(pos_meas[:,0],pos_meas[:,1],'rs',markersize=5,label='meas')
 
   # Plot lines to closest matches
   for i in range(pos_gnd.shape[0]):
@@ -195,50 +169,6 @@ for k in range(10):
   plt.title('Iter: %d' % k)
   plt.draw()
   plt.pause(0.05)
-
-
-
-# Get final transformation matrix
-#AFFINE
-X = np.zeros((2*18,6))
-X[::2,:2] = pos_gnd
-X[::2,2] = 1
-X[1::2,3:5] = pos_gnd
-X[1::2,5] = 1
-
-# #ROTATE-TRANSLATE
-# X = np.zeros((2*18,4))
-# X[::2,0:2] = pos_gnd
-# X[::2,2] = 1
-# X[1::2,0] = pos_gnd[:,1]
-# X[1::2,1] = -pos_gnd[:,0]
-# X[1::2,3] = 1
-
-
-X = np.mat(X)
-# print(X)
-
-# projected points
-Y = np.ones(2*18)
-Y[::2] = pos_closest[:,0]
-Y[1::2] = pos_closest[:,1]
-Y = Y.reshape(-1,1)
-
-
-coeffs = np.linalg.inv(X.T*X)*X.T*Y
-
-#AFFINE
-M = coeffs.reshape(2,3)
-
-# #ROTATE-TRANSLATE
-# M = np.mat(np.zeros((2,3)))
-# M[0,0] = coeffs[0]
-# M[0,1] = coeffs[1]
-# M[0,2] = coeffs[2]
-
-# M[1,0] = -coeffs[1]
-# M[1,1] = coeffs[0]
-# M[1,2] = coeffs[3]
 
 print(M)
 plt.show(block=True)
