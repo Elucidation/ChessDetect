@@ -1,6 +1,6 @@
 import numpy as np
 from matplotlib import pyplot as plt
-# from sklearn import linear_model, datasets
+from sklearn import linear_model, datasets
 np.set_printoptions(suppress=True)
 
 # Given a set of rhos and thetas, find the chessboard lines, and generate missing ones?

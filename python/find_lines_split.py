@@ -18,7 +18,7 @@ for chessboard_idx in range(1,20):
   print("Original Shape [y, x, channels]: ",original_img.shape)
 
   # Get scaled image
-  img_max_width = 256
+  img_max_width = 512
   img_scale_ratio = img_max_width / original_img.shape[1]
 
   img = cv2.resize(original_img, (0,0), fx=img_scale_ratio, fy=img_scale_ratio)
@@ -102,7 +102,7 @@ for i in range(len(all_rhos)):
   plt.plot(thetas*180/np.pi, rhos,'s',label='%d'%i)
   theta_mean = thetas.mean()
   plt.plot([theta_mean*180/np.pi, theta_mean*180/np.pi], [rhos.min(), rhos.max()],'k--')
-  plt.title('chessboard%d.jpg' % i)
+  plt.title('chessboard%d.jpg' % (i-1))
   plt.show()
 
 plt.legend()
